@@ -1,3 +1,0 @@
-# Same pins as ../requirements_frozen.txt. Only what the frontend needs (no TensorFlow).
-streamlit==1.67.0
-requests==2.34.2
