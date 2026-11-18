@@ -14,7 +14,8 @@ clearly labelled as not real forecasts.
     python -m unittest discover -s tests -v
 
 ## Files
-- `app.py`: the Streamlit page (Phase 1: connection test)
+- `app.py`: the Streamlit page (Phase 2: backend check, traffic data input, forecast request)
 - `api_client.py`: all HTTP calls, error handling, Demo mode
+- `validation.py`: checks the 5-row input (same rules and codes as the backend validator) and reads CSV files
 - `ui_text.py`: every message shown to the user (safety wording, error messages)
 - `.streamlit/config.toml`: colour theme

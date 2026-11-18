@@ -39,6 +39,9 @@ ERROR_MESSAGES = {
     "BAD_URL": "The backend address in the sidebar is not valid.",
     "BAD_INPUT": "The traffic window could not be read. Check the table or file and try again.",
     "BAD_RESPONSE": "The backend answered, but not in the format the API contract defines, so the result was not shown.",
+    "NOT_NUMERIC": "A cell that should hold a number contains text. Please enter numbers only.",
+    "BAD_CSV": "The file could not be read as a CSV table. Check that it is a comma-separated .csv file.",
+    "FILE_TOO_LARGE": "The file is too large. Upload a smaller CSV (only the last 5 rows are used).",
     "REQUEST_FAILED": "The request to the backend failed. Check the address and your network.",
 }
 

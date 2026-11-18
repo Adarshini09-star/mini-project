@@ -1,6 +1,6 @@
-"""SIH26153 dashboard, Phase 1: connection test.
-Checks the backend (GET /health) and sends one made-up sample window (POST /predict) so the API client can be verified.
-The full dashboard (input table, forecast card, analytics) is built on top of this in later phases.
+"""SIH26153 dashboard, Phase 2: backend check + traffic data input + forecast request.
+The user types or uploads the last 5 minutes of traffic, the app checks it (validation.py), and only valid data can be sent
+to the backend (api_client.py). The result is shown in a simple form here; Phase 3 turns it into the full forecast display.
 
 Run from inside this folder:   python -m streamlit run app.py
 """
@@ -8,22 +8,12 @@ import streamlit as st
 
 import api_client as api
 import ui_text as T
+import validation as V
 
 st.set_page_config(page_title="Bot Traffic Forecast", page_icon="📈", layout="wide")
 
-# Made-up numbers for a connection test only (the example window from docs/API_CONTRACT.md). Not real traffic.
-SAMPLE_WINDOW = [
-    {"Timestamp": "2018-02-03T09:00:00", "Bot_Pct": 18.0, "Total_Flows": 1800, "Fwd_Pkts_Bot": 1050, "Bwd_Pkts_Bot": 820,
-     "Fwd_Bytes_Bot": 63000, "Bwd_Bytes_Bot": 28000, "Avg_Duration_Bot": 22000},
-    {"Timestamp": "2018-02-03T09:01:00", "Bot_Pct": 19.5, "Total_Flows": 1850, "Fwd_Pkts_Bot": 1100, "Bwd_Pkts_Bot": 860,
-     "Fwd_Bytes_Bot": 66000, "Bwd_Bytes_Bot": 30000, "Avg_Duration_Bot": 23000},
-    {"Timestamp": "2018-02-03T09:02:00", "Bot_Pct": 17.2, "Total_Flows": 1790, "Fwd_Pkts_Bot": 1020, "Bwd_Pkts_Bot": 800,
-     "Fwd_Bytes_Bot": 61000, "Bwd_Bytes_Bot": 27500, "Avg_Duration_Bot": 21500},
-    {"Timestamp": "2018-02-03T09:03:00", "Bot_Pct": 20.1, "Total_Flows": 1900, "Fwd_Pkts_Bot": 1150, "Bwd_Pkts_Bot": 890,
-     "Fwd_Bytes_Bot": 68000, "Bwd_Bytes_Bot": 31000, "Avg_Duration_Bot": 24000},
-    {"Timestamp": "2018-02-03T09:04:00", "Bot_Pct": 18.8, "Total_Flows": 1830, "Fwd_Pkts_Bot": 1080, "Bwd_Pkts_Bot": 840,
-     "Fwd_Bytes_Bot": 65000, "Bwd_Bytes_Bot": 29500, "Avg_Duration_Bot": 22500},
-]
+PRESETS = V.presets()
+ROW_LABELS = ["Minute 1 (oldest)", "Minute 2", "Minute 3", "Minute 4", "Minute 5 (newest)"]
 
 
 def call(fn, demo):
@@ -62,8 +52,7 @@ def show_forecast(result):
         return
     f = result["data"]
     show_status_banner(result)
-    placeholder = result["demo"] or api.is_mock(f)
-    tag = T.MOCK_TAG if placeholder else ""
+    tag = T.MOCK_TAG if (result["demo"] or api.is_mock(f)) else ""
     c1, c2, c3 = st.columns(3)
     c1.metric("Predicted bot traffic (next minute)", f"{f['predicted_bot_pct_next_minute']:.2f} %{tag}")
     c2.metric("Estimated traffic state", f"{f['predicted_state']}{tag}")
@@ -72,6 +61,37 @@ def show_forecast(result):
         st.warning(w)
     with st.expander("Raw response from the API"):
         st.json(f)
+
+
+def show_issues(issues):
+    for i in issues:
+        st.error(f"{T.ERROR_MESSAGES.get(i.code, 'There is a problem with the input.')}\n\nDetails: {i.detail}")
+
+
+def read_input():
+    """Draw the input widgets. Returns (window DataFrame or None, list of Issue)."""
+    method = st.radio("Input method", ["Type or edit values", "Upload a CSV file"], horizontal=True)
+    if method.startswith("Type"):
+        preset = st.selectbox("Start from an example (made-up numbers, not real traffic; every value can be edited)", list(PRESETS))
+        start = st.text_input("Time label of the first (oldest) row", value=V.DEFAULT_START,
+                              help="Only labels the minutes so the backend can check they are 60 seconds apart. Format: YYYY-MM-DD HH:MM:SS")
+        st.write("One row is one minute, oldest at the top. The forecast is for the minute after the last row.")
+        table = st.data_editor(PRESETS[preset].set_axis(ROW_LABELS), num_rows="fixed", key="editor_" + preset)
+        return V.table_to_window(table, start)
+    st.write("CSV columns: Timestamp (recommended), " + ", ".join(V.FEATURES) + ". The LAST 5 rows are used; other columns are ignored.")
+    up = st.file_uploader("CSV file", type="csv")
+    if up is None:
+        st.info("Choose a CSV file to continue.")
+        return None, []
+    try:
+        window, info = V.read_csv_window(up.getvalue())
+    except V.InputFileError as e:
+        return None, [V.Issue(e.code, e.detail)]
+    st.caption(f"Read {info['total_rows']} rows; using the last {info['used_rows']}."
+               + (f" Ignored columns: {', '.join(info['ignored_columns'])}." if info["ignored_columns"] else ""))
+    if not info["has_timestamp"]:
+        st.warning("No Timestamp column: the backend cannot check that the rows are 60 seconds apart.")
+    return window, V.validate_window(window)
 
 
 st.title(T.APP_TITLE)
@@ -91,13 +111,26 @@ if st.button("Check backend connection"):
 if "health_result" in st.session_state:
     show_health(st.session_state["health_result"])
 
-st.subheader("2. Connection test with a sample window")
-st.caption("Sends 5 made-up example rows (not real traffic) to POST /predict to check that the API client works end to end.")
-if st.button("Send sample window"):
+st.subheader("2. Traffic data")
+window, issues = read_input()
+ready = window is not None and not issues
+if issues:
+    show_issues(issues)
+elif window is not None:
+    st.success("Input looks valid: 5 rows, 7 features, rows 60 seconds apart.")
+    st.dataframe(window)
+
+st.subheader("3. Forecast")
+if st.button("Get forecast", type="primary", disabled=not ready):
     with st.spinner("Waiting for the forecast..."):
-        st.session_state["forecast_result"] = call(lambda: api.request_forecast(SAMPLE_WINDOW, base_url, demo=demo), demo)
+        st.session_state["forecast_result"] = call(lambda: api.request_forecast(window, base_url, demo=demo), demo)
+        st.session_state["forecast_input"] = window.to_json(date_format="iso")
 if "forecast_result" in st.session_state:
+    if st.session_state.get("forecast_input") != (window.to_json(date_format="iso") if window is not None else None):
+        st.info("The forecast below was made from earlier input values. Click Get forecast to update it.")
     show_forecast(st.session_state["forecast_result"])
+else:
+    st.caption("No forecast yet. Enter valid data above and click Get forecast." if not ready else "No forecast yet. Click Get forecast.")
 
 st.divider()
 st.caption(T.LOW_RECALL_NOTE)
