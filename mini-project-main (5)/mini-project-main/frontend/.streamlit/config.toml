@@ -1,0 +1,16 @@
+# Two palettes. The sidebar switch in the app (or Streamlit's own Settings menu) chooses between them.
+# Streamlit reads this file from the folder you run it in, so run the app from inside frontend/.
+[theme.light]
+primaryColor = "#3F6B3A"
+backgroundColor = "#FAF6EC"
+secondaryBackgroundColor = "#EAE4D2"
+textColor = "#2E2B28"
+
+[theme.dark]
+primaryColor = "#3DDC84"
+backgroundColor = "#000000"
+secondaryBackgroundColor = "#0F1A13"
+textColor = "#E8F5EC"
+
+[browser]
+gatherUsageStats = false

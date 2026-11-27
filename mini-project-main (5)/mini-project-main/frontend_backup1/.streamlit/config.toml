@@ -1,0 +1,12 @@
+# Earthy theme: cream background, sage/sand panels, forest-green accents, charcoal text.
+# Streamlit reads this file from the folder you run it in, so run the app from inside frontend/.
+[theme]
+base = "light"
+primaryColor = "#3F6B3A"
+backgroundColor = "#FAF6EC"
+secondaryBackgroundColor = "#EAE4D2"
+textColor = "#2E2B28"
+font = "sans serif"
+
+[browser]
+gatherUsageStats = false
